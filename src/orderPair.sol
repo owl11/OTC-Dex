@@ -10,17 +10,16 @@ import "./orderEngine.sol";
 contract orderPair is RBTWrapper, orderEngine {
     using SafeERC20 for IERC20;
 
-    IERC20 immutable public token1; //WETH
-    IERC20 immutable public token2; //DAI
+    IERC20 public immutable token1; //WETH
+    IERC20 public immutable token2; //DAI
     uint32 constant maxFee = 250;
-
 
     error amountLessThanMin();
     error noOrderForSuchPrice();
     error NoAmountsForPrice();
     error amountGreaterThanPriceQty();
 
-    constructor(address _token1, address _token2)  {
+    constructor(address _token1, address _token2) {
         token1 = IERC20(_token1);
         token2 = IERC20(_token2);
     }
@@ -33,8 +32,6 @@ contract orderPair is RBTWrapper, orderEngine {
             RBTWrapper.addOrder(price, 1);
         }
         setOrder(price, amountInToken2, 1);
-        token2.safeTransferFrom(msg.sender, address(this), amountInToken2);
-        // makerToPrice[price] = msg.sender;
     }
 
     function makeSellOrder(uint160 price, uint160 amountInToken1) public {
@@ -42,10 +39,11 @@ contract orderPair is RBTWrapper, orderEngine {
         //     revert amountLessThanMin();
         // }
         if (!RBTWrapper.getExists(price, 2)) {
-            RBTWrapper.addOrder(price, 2);        }
+            RBTWrapper.addOrder(price, 2);
+        }
         orderEngine.setOrder(price, amountInToken1, 2);
 
-        token1.safeTransferFrom(msg.sender, address(this), amountInToken1);
+        // token1.safeTransferFrom(msg.sender, address(this), amountInToken1);
     }
 
     function fullFIllBuyOrder(uint160 price, uint32 orderId) public {
@@ -53,15 +51,10 @@ contract orderPair is RBTWrapper, orderEngine {
             revert noOrderForSuchPrice();
         }
         (uint160 _orderAmount, uint8 _side, address _maker) = orderEngine.getOrder(orderId);
-
-        uint160 amount1Out = _orderAmount / price;
-        // uint160 fee_1 = calculateFee(amount1Out);
-        // uint160 fee_2 = calculateFee(_orderAmount);
-        // amount1Out -= fee_1;
-        // _orderAmount -= fee_2;
-        token2.safeTransferFrom(address(this), msg.sender, _orderAmount);
+        uint160 amount1Out = (_orderAmount / price) * 1e18;
         token1.safeTransferFrom(msg.sender, _maker, amount1Out);
-        // token1.safeTransferFrom(msg.sender, address(this), fee_1);
+        token2.safeTransferFrom(_maker, msg.sender, _orderAmount);
+
         orderEngine.removeOrder(orderId, price, _side);
     }
 
@@ -70,16 +63,9 @@ contract orderPair is RBTWrapper, orderEngine {
             revert noOrderForSuchPrice();
         }
         (uint160 _orderAmount, uint8 _side, address _maker) = orderEngine.getOrder(orderId);
-
-        uint160 amount2Out = _orderAmount * price;
-        // uint160 fee_1 = calculateFee(amount1Out);
-        // uint160 fee_2 = calculateFee(_orderAmount);
-        // amount1Out -= fee_1;
-        // _orderAmount -= fee_2;
-        token2.safeTransferFrom(address(this), msg.sender, _orderAmount);
-        token1.safeTransferFrom(msg.sender, _maker, amount2Out);
-        
-        // token1.safeTransferFrom(msg.sender, address(this), fee_1);
+        uint160 amount2Out = (_orderAmount * price) / 1e18;
+        token2.safeTransferFrom(msg.sender, _maker, _orderAmount);
+        token1.safeTransferFrom(_maker, msg.sender, amount2Out);
         orderEngine.removeOrder(orderId, price, _side);
     }
 }
